@@ -1,9 +1,6 @@
-from __future__ import absolute_import
+__all__ = ["rtree", "rect"]
 
-__all__ = ["rtree","rect"]
-
-from . import rect
-from . import rtree
+from . import rect, rtree
 
 Rect = rect.Rect
 RTree = rtree.RTree

@@ -34,5 +34,21 @@ An R-tree is a spatial index over axis-aligned rectangles. (The sides of the rec
 
 They take the form of trees of rectangles where each node's rectangle contains the rectangle of all its children. The challenge is in deciding how to group rectangles in order to arrive at a well-balanced tree; pyrtree uses k-means clustering to do this. (S. Brakatsoulas, D. Pfoser, and Y. Theodoridis. "Revisiting R-Tree Construction Principles", Advances in Databases and Information Systems 2435 (2002): 17-24)
 
+# Development
 
+Requires Python >= 3.10 (developed and tested against 3.14) and [uv](https://docs.astral.sh/uv/).
+
+```
+uv sync --extra dev      # install dev dependencies (pytest, ruff) into .venv
+uv run pytest            # run the test suite
+uv run ruff check .      # lint
+uv run ruff format .     # format
+```
+
+The `bench_libspatial.py` benchmark compares against the `Rtree` package, which wraps the
+libspatialindex C library. It's an optional extra since it needs that system library installed:
+
+```
+uv sync --extra bench-compare
+```
 
