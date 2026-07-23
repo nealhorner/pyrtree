@@ -371,6 +371,10 @@ def center_of_gravity(nodes):
             cys = cys + cy
             totarea = totarea + a
             count += 1
+    if count == 0:
+        # No non-null rects at all (e.g. every node is NullRect) -- there's
+        # no meaningful centroid, so fall back to the origin.
+        return 0.0, 0.0
     if totarea == 0.0:
         # All rects in this cluster are degenerate (zero width and/or
         # height, e.g. points) -- fall back to an unweighted centroid
