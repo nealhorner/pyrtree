@@ -1,0 +1,61 @@
+name: PR checks
+
+on:
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    name: Unit tests (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Run unit tests
+        run: python pyrtree/tests/test_rtree.py
+
+  format:
+    name: Formatting check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install black
+        run: pip install black
+      - name: Check formatting
+        run: black --check --diff pyrtree setup.py
+
+  version-check:
+    name: Package version bump
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Ensure setup.py version was incremented
+        run: |
+          base_version=$(git show "origin/${{ github.base_ref }}:setup.py" | grep -oE 'version\s*=\s*"[^"]+"' | grep -oE '[0-9][^"]*')
+          pr_version=$(grep -oE 'version\s*=\s*"[^"]+"' setup.py | grep -oE '[0-9][^"]*')
+
+          echo "Base branch version: $base_version"
+          echo "PR branch version:   $pr_version"
+
+          python - "$base_version" "$pr_version" <<'EOF'
+          import sys
+
+          def parse(v):
+              return tuple(int(p) for p in v.split("."))
+
+          base, pr = parse(sys.argv[1]), parse(sys.argv[2])
+          if pr <= base:
+              sys.exit(
+                  f"setup.py version must be incremented: base={sys.argv[1]} pr={sys.argv[2]}"
+              )
+          EOF
