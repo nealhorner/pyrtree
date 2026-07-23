@@ -166,8 +166,8 @@ python test_rtree.py
 
 ## Benchmarks
 
-Benchmark scripts live under [pyrtree/bench](pyrtree/bench) and shell wrappers
-under [bin](bin):
+Benchmark scripts live under [pyrtree/bench](../pyrtree/bench) and shell wrappers
+under [bin](../bin):
 
 ```bash
 bin/spatial_index_bench.sh
