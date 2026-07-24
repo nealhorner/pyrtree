@@ -2,10 +2,13 @@
 # see doc/ref/r-tree-clustering-split-algo.pdf
 
 import array
+import logging
 import random
 import time
 
 from .rect import NullRect, Rect, union_all
+
+logger = logging.getLogger(__name__)
 
 MAXCHILDREN = 10
 MAX_KMEANS = 5
@@ -428,8 +431,8 @@ def k_means_cluster(root, k, nodes):
 
         for c in clusters:
             if len(c) == 0:
-                print("Errorrr....")
-                print(f"Nodes: {len(ns)}, centers: {cluster_centers!r}")
+                logger.error("Errorrr....")
+                logger.error("Nodes: %d, centers: %r", len(ns), cluster_centers)
 
             assert len(c) > 0
 
