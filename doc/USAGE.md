@@ -7,8 +7,17 @@ aimed at in-memory **insert-then-query** workloads over 2-dimensional data
 
 ## Installation
 
+`pyrtree` uses [uv](https://docs.astral.sh/uv/) and a standard `pyproject.toml`
+(requires Python >= 3.10).
+
 ```bash
-python setup.py install
+uv sync --extra dev      # install pyrtree + dev dependencies (pytest, ruff) into .venv
+```
+
+Or install it as a regular dependency with pip:
+
+```bash
+pip install .
 ```
 
 ## Quick Start
@@ -107,10 +116,13 @@ leaf_objects = [n.leaf_obj() for n in t.query_point((x, y)) if n.is_leaf()]
 | `n.rect` | The node's bounding `Rect`. |
 | `n.has_children()` / `n.children()` | Inspect an internal node's children. |
 
-> **Note:** Query result nodes are transient cursors — they are invalidated
-> as you continue iterating past them. Extract any data you need (e.g. via
-> `leaf_obj()`) while you're still consuming the generator; don't collect
-> raw nodes into a list to use afterward.
+> **Note:** Query result nodes are transient cursors — the same node object
+> is reused and mutated as iteration proceeds. Extract any data you need
+> (e.g. via `leaf_obj()`) while you're still consuming the generator; don't
+> collect raw nodes into a list to use afterward. It's safe to stop
+> iterating early (`break`, `next()`, `any()`, `itertools.islice`, etc.) —
+> partially consuming a query or `walk()` no longer corrupts the tree for
+> subsequent operations.
 
 ## Custom Traversal
 
@@ -160,18 +172,27 @@ print(hits)  # ['a', 'c'] (order not guaranteed)
 ## Running Tests
 
 ```bash
-cd pyrtree/tests
-python test_rtree.py
+uv run pytest            # run the test suite
+uv run ruff check .      # lint
+uv run ruff format .     # format
 ```
 
 ## Benchmarks
 
-Benchmark scripts live under [pyrtree/bench](../pyrtree/bench) and shell wrappers
-under [bin](../bin):
+Benchmark scripts live under [pyrtree/bench](../pyrtree/bench):
 
 ```bash
-bin/spatial_index_bench.sh
+python pyrtree/bench/bench_rtree.py
 ```
 
 Environment variables `TEST_ITER` and `TEST_INTERVAL` control the number of
-insertions and logging interval for `pyrtree/bench/bench_rtree.py`.
+insertions and logging interval.
+
+Convenience wrappers live under [bin](../bin):
+
+- `bin/gitbench.sh` — benchmarks the working tree against the last commit
+  and plots both with `bview.py`.
+- `bin/bench_cprofile.sh` — profiles `bench_rtree.py` with `cProfile`.
+- `bin/spatial_index_bench.sh` — benchmarks `libspatialindex`'s `Rtree`
+  package for comparison; requires the `bench-compare` extra
+  (`uv sync --extra bench-compare`) plus a local `libspatialindex` build.
