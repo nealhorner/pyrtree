@@ -35,7 +35,7 @@ class ExponentialLogSchedule:
 
 
 if __name__ == "__main__":
-    gc.disable()  # FFFFUUUUUUUUUUU
+    gc.disable()  # avoid GC pauses skewing the per-insert timing measurements
     G = RectangleGen()
     rt = RTree()
     schedule = ExponentialLogSchedule(GROWTH)
