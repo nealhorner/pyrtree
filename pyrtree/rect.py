@@ -1,7 +1,7 @@
 import math
 
 
-class Rect(object):
+class Rect:
     """
     A rectangle class that stores: an axis aligned rectangle, and: two
      flags (swapped_x and swapped_y).  (The flags are stored
@@ -71,12 +71,14 @@ class Rect(object):
         return Rect(nx, ny, nx2, ny2)
 
     def does_contain(self, o):
-        return self.does_containpoint((o.x, o.y)) and self.does_containpoint(
-            (o.xx, o.yy)
-        )
+        return self.does_containpoint((o.x, o.y)) and self.does_containpoint((o.xx, o.yy))
 
     def does_intersect(self, o):
-        return self.intersect(o).area() > 0
+        if self is NullRect or o is NullRect:
+            return False
+        w = min(self.xx, o.xx) - max(self.x, o.x)
+        h = min(self.yy, o.yy) - max(self.y, o.y)
+        return w > 0 and h > 0
 
     def does_containpoint(self, p):
         x, y = p
@@ -130,5 +132,5 @@ def union_all(kids):
     cur = NullRect
     for k in kids:
         cur = cur.union(k.rect)
-    assert False == cur.swapped_x
+    assert not cur.swapped_x
     return cur

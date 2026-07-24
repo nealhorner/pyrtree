@@ -2,11 +2,12 @@
 
 # quick'n'dirty benchmark viewer.
 
+import csv
+import sys
+
 import pylab as pl
-import sys, csv
 
 if __name__ == "__main__":
-
     file_counts = len(sys.argv) - 1
 
     def pos(row, col):

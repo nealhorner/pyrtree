@@ -1,26 +1,21 @@
-# FIXME: path hackery.
-if __name__ == "__main__":
-    import sys, os
-
-    mypath = os.path.dirname(sys.argv[0])
-    sys.path.append(os.path.abspath(os.path.join(mypath, "../../")))
+import array
+import collections
+import math
+import random
+import unittest as ut
 
 from pyrtree import Rect, RTree
 from pyrtree.rect import NullRect
 from pyrtree.rtree import center_of_gravity, closest, k_means_cluster, silhouette_coeff
 
-import array
-import collections
-import unittest as ut
-import random, math
-from testutil import *
+from .testutil import take
 
 
 def rr():
     return random.uniform(0.0, 10.0)
 
 
-class TstO(object):
+class TstO:
     """Dummy test object to store in r-trees."""
 
     def __init__(self, r):
@@ -31,7 +26,7 @@ class TstO(object):
             yield self
 
 
-class RectangleGen(object):
+class RectangleGen:
     """Generate random rectangles w/ various properties."""
 
     def rect(self, size=10.0):
@@ -92,23 +87,23 @@ class RectangleTests(ut.TestCase):
         rb = Rect(5, 5, 15, 15)
         res = ra.intersect(rb)
         x, y, w, h = res.extent()
-        self.assertEquals(x, 5)
-        self.assertEquals(y, 5)
-        self.assertEquals(w, 5)
-        self.assertEquals(h, 5)
-        self.assertEquals(res.area(), 25)
+        self.assertEqual(x, 5)
+        self.assertEqual(y, 5)
+        self.assertEqual(w, 5)
+        self.assertEqual(h, 5)
+        self.assertEqual(res.area(), 25)
 
         rc = Rect(0, 0, 10, 10)
         rd = Rect(11, 11, 21, 21)
         res2 = rc.intersect(rd)
-        self.assertEquals(res2.area(), 0)
+        self.assertEqual(res2.area(), 0)
         self.assertTrue(res2 is NullRect)
 
-        for i in range(1000):
+        for _ in range(1000):
             a, b = G.intersectingPair()
             self.assertTrue(a.intersect(b).area() > 0.0)
             c, d = G.disjointPair()
-            self.assertEquals(c.intersect(d).area(), 0)
+            self.assertEqual(c.intersect(d).area(), 0)
 
         self.assertTrue(ra.intersect(NullRect) is NullRect)
         self.assertTrue(NullRect.intersect(ra) is NullRect)
@@ -117,10 +112,10 @@ class RectangleTests(ut.TestCase):
         ra = Rect(0, 0, 10, 10)
         rb = Rect(-10, -10, 1, 1)
         x, y, w, h = ra.union(rb).extent()
-        self.assertEquals(x, -10)
-        self.assertEquals(y, -10)
-        self.assertEquals(w, 20)
-        self.assertEquals(h, 20)
+        self.assertEqual(x, -10)
+        self.assertEqual(y, -10)
+        self.assertEqual(w, 20)
+        self.assertEqual(h, 20)
 
         for i in range(1000):
             a, b = G.rect(), G.rect()
@@ -131,8 +126,7 @@ class RectangleTests(ut.TestCase):
             self.assertTrue(u.intersect(b).area() > 0)
             self.assertTrue(
                 u.area() >= (max(a.area(), b.area())),
-                "union area (iter %d) fail %f >= %f"
-                % (i, u.area(), (max(a.area(), b.area()))),
+                f"union area (iter {i}) fail {u.area()} >= {max(a.area(), b.area())}",
             )
 
             c, d = G.disjointPair()
@@ -217,18 +211,16 @@ class RectangleTests(ut.TestCase):
 
 class RTreeTest(ut.TestCase):
     def testCons(self):
-        n = RTree()
+        RTree()
 
     def testEmptyTree(self):
         tree = RTree()
         self.assertEqual([r for r in tree.query_point((5, 5)) if r.is_leaf()], [])
-        self.assertEqual(
-            [r for r in tree.query_rect(Rect(0, 0, 10, 10)) if r.is_leaf()], []
-        )
+        self.assertEqual([r for r in tree.query_rect(Rect(0, 0, 10, 10)) if r.is_leaf()], [])
         self.assertEqual([r for r in tree.walk(lambda x, y: True) if r.is_leaf()], [])
 
     def invariants(self, tree):
-        self.assertEquals(tree.cursor.index, 0)
+        self.assertEqual(tree.cursor.index, 0)
         self._invariants(tree.cursor, {})
 
     def _invariants(self, node, seen):
@@ -248,19 +240,19 @@ class RTreeTest(ut.TestCase):
         else:
             for c in node.children():
                 self.assertTrue(not c.is_leaf())
-        self.assertEquals(idx, node.index)
+        self.assertEqual(idx, node.index)
 
         r = Rect(node.rect.x, node.rect.y, node.rect.xx, node.rect.yy)
         for c in node.children():
             assert r.does_contain(c.rect)
 
-        self.assertEquals(idx, node.index)
+        self.assertEqual(idx, node.index)
 
         for c in node.children():
             if not c.is_leaf():
                 self._invariants(c, seen)
 
-        self.assertEquals(idx, node.index)
+        self.assertEqual(idx, node.index)
 
     def testContainer(self):
         """Test container-like behaviour."""
@@ -278,7 +270,7 @@ class RTreeTest(ut.TestCase):
             rrs[w] = rrs[w] + 1
 
         for x in xs:
-            self.assertEquals(rrs[x], 1)
+            self.assertEqual(rrs[x], 1)
 
     def testDegenerateContainer(self):
         """Tests that an r-tree still works like a container even with highly overlapping rects."""
@@ -300,6 +292,28 @@ class RTreeTest(ut.TestCase):
             tree.insert(x, x.rect)
             self.invariants(tree)
 
+    def testOriginPointNotConfusedWithNullRect(self):
+        """A genuine zero-area rect at the exact origin must round-trip as a
+        real Rect, not silently collapse into the NullRect sentinel (which
+        also stores raw coordinates (0,0,0,0))."""
+        tree = RTree()
+        origin = TstO(Rect(0, 0, 0, 0))
+        tree.insert(origin, origin.rect)
+        for i in range(1, 15):
+            x = TstO(Rect(i, i, i + 1, i + 1))
+            tree.insert(x, x.rect)
+        self.invariants(tree)
+
+        origin_leaf_rects = [
+            n.rect for n in tree.walk(lambda x, y: True) if n.is_leaf() and n.leaf_obj() is origin
+        ]
+        self.assertEqual(len(origin_leaf_rects), 1)
+        self.assertTrue(origin_leaf_rects[0] is not NullRect)
+
+        # The origin point must widen the tree's bounding box, not get
+        # dropped from it as if it were absent (NullRect).
+        self.assertTrue(tree.cursor.rect.does_containpoint((0, 0)))
+
     def testPointQuery(self):
         xs = [TstO(r) for r in take(1000, G.rect, 0.01)]
         tree = RTree()
@@ -312,7 +326,7 @@ class RTreeTest(ut.TestCase):
             self.assertTrue(x.rect.does_containpoint(qp))
             op = G.pointOutside(x.rect)
             rs = list([r.leaf_obj() for r in tree.query_point(qp)])
-            self.assertTrue(x in rs, "Not in results of len %d :(" % (len(rs)))
+            self.assertTrue(x in rs, f"Not in results of len {len(rs)} :(")
             rrs = list([r.leaf_obj() for r in tree.query_point(op)])
             self.assertFalse(x in rrs)
 
@@ -336,8 +350,36 @@ class RTreeTest(ut.TestCase):
             rres = list([r.leaf_obj() for r in rt.query_rect(orect)])
             self.assertFalse(x in rres)
 
+    def testAbandonedWalkDoesNotCorruptTree(self):
+        """Partially consuming walk()/query_point()/query_rect() must not
+        leave the tree's root cursor stuck mid-traversal.
 
-class _FakeNode(object):
+        Filtering for is_leaf() forces each generator to recurse past the
+        root and down into the tree (the root itself is never a leaf, and
+        always trivially satisfies point/rect containment via the bounding
+        box, so an unfiltered next() would stop before any recursion and
+        not exercise the bug at all) before it gets abandoned without being
+        exhausted.
+        """
+        xs = [TstO(r) for r in take(20, G.rect, 0.01)]
+        tree = RTree()
+        for x in xs:
+            tree.insert(x, x.rect)
+            self.invariants(tree)
+
+        next(r for r in tree.walk(lambda x, y: True) if r.is_leaf())
+        p = G.pointInside(xs[0].rect)
+        next(r for r in tree.query_point(p) if r.is_leaf())
+        qrect = G.intersectingWith(xs[0].rect)
+        next(r for r in tree.query_rect(qrect) if r.is_leaf())
+
+        # A subsequent insert must still succeed.
+        extra = TstO(G.rect())
+        tree.insert(extra, extra.rect)
+        self.invariants(tree)
+
+
+class _FakeNode:
     """Minimal stand-in for a _NodeCursor: the clustering functions below
     only ever touch .index and .rect."""
 
@@ -365,8 +407,7 @@ class ClusteringTests(ut.TestCase):
     def testKMeansClusterSeparatesDistinctGroups(self):
         root = RTree()
         near_origin = [
-            _FakeNode(i, Rect(i * 0.1, i * 0.1, i * 0.1 + 1, i * 0.1 + 1))
-            for i in range(4)
+            _FakeNode(i, Rect(i * 0.1, i * 0.1, i * 0.1 + 1, i * 0.1 + 1)) for i in range(4)
         ]
         far_away = [
             _FakeNode(
@@ -389,13 +430,12 @@ class ClusteringTests(ut.TestCase):
             cluster_indices = {n.index for n in cluster}
             self.assertTrue(
                 cluster_indices <= origin_indices or cluster_indices <= far_indices,
-                "cluster %r mixed the two separated groups" % (cluster_indices,),
+                f"cluster {cluster_indices!r} mixed the two separated groups",
             )
 
     def testSilhouetteCoeffHighForWellSeparatedClusters(self):
         near_origin = [
-            _FakeNode(i, Rect(i * 0.1, i * 0.1, i * 0.1 + 1, i * 0.1 + 1))
-            for i in range(4)
+            _FakeNode(i, Rect(i * 0.1, i * 0.1, i * 0.1 + 1, i * 0.1 + 1)) for i in range(4)
         ]
         far_away = [
             _FakeNode(
@@ -405,7 +445,7 @@ class ClusteringTests(ut.TestCase):
             for i in range(4)
         ]
         score = silhouette_coeff([near_origin, far_away], {})
-        self.assertTrue(score > 0.8, "expected a high score, got %f" % score)
+        self.assertTrue(score > 0.8, f"expected a high score, got {score}")
 
     def testSilhouetteCoeffSingleClusterIsOne(self):
         node = _FakeNode(0, Rect(0, 0, 1, 1))

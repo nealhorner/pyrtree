@@ -10,27 +10,24 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.9", "3.11", "3.12"]
+        python-version: ["3.10", "3.12", "3.14"]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
+      - uses: astral-sh/setup-uv@v3
       - name: Run unit tests
-        run: python pyrtree/tests/test_rtree.py
+        run: uv run --extra dev --python ${{ matrix.python-version }} pytest
 
   format:
-    name: Formatting check
+    name: Lint & formatting check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install black
-        run: pip install black
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync --extra dev
       - name: Check formatting
-        run: black --check --diff pyrtree setup.py
+        run: uv run ruff format --check --diff .
+      - name: Lint
+        run: uv run ruff check .
 
   version-check:
     name: Package version bump
@@ -39,15 +36,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Ensure setup.py version was incremented
+      - name: Ensure pyproject.toml version was incremented
         run: |
-          base_version=$(git show "origin/${{ github.base_ref }}:setup.py" | grep -oE 'version\s*=\s*"[^"]+"' | grep -oE '[0-9][^"]*')
-          pr_version=$(grep -oE 'version\s*=\s*"[^"]+"' setup.py | grep -oE '[0-9][^"]*')
+          base_version=$(git show "origin/${{ github.base_ref }}:pyproject.toml" | grep -m1 -oE '^version\s*=\s*"[^"]+"' | grep -oE '[0-9][^"]*')
+          pr_version=$(grep -m1 -oE '^version\s*=\s*"[^"]+"' pyproject.toml | grep -oE '[0-9][^"]*')
 
           echo "Base branch version: $base_version"
           echo "PR branch version:   $pr_version"
 
-          python - "$base_version" "$pr_version" <<'EOF'
+          python3 - "$base_version" "$pr_version" <<'EOF'
           import sys
 
           def parse(v):
@@ -56,6 +53,6 @@ jobs:
           base, pr = parse(sys.argv[1]), parse(sys.argv[2])
           if pr <= base:
               sys.exit(
-                  f"setup.py version must be incremented: base={sys.argv[1]} pr={sys.argv[2]}"
+                  f"pyproject.toml version must be incremented: base={sys.argv[1]} pr={sys.argv[2]}"
               )
           EOF
