@@ -133,6 +133,7 @@ predicate function:
 def predicate(node, leaf_obj):
     return node.rect.does_intersect(my_rect)
 
+
 for node in t.walk(predicate):
     if node.is_leaf():
         print(node.leaf_obj())
