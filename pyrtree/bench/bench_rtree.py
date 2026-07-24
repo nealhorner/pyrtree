@@ -1,4 +1,5 @@
 import gc
+import math
 
 # TODO: make these command-line params.
 import os
@@ -19,13 +20,17 @@ class ExponentialLogSchedule:
     """True at v = 0, 1, 2, 4, 8, ... (each point `growth`x the last)."""
 
     def __init__(self, growth):
+        if not math.isfinite(growth) or growth <= 1:
+            raise ValueError("growth must be finite and greater than 1")
         self.growth = growth
         self.next_log = 0
 
     def hit(self, v):
         if v != self.next_log:
             return False
-        self.next_log = 1 if self.next_log == 0 else int(self.next_log * self.growth)
+        self.next_log = (
+            1 if self.next_log == 0 else max(self.next_log + 1, int(self.next_log * self.growth))
+        )
         return True
 
 
@@ -42,9 +47,10 @@ if __name__ == "__main__":
             t = time.perf_counter()
 
             dt = t - interval_start
-            count = max(v - last_v, 1)
+            count = v - last_v
             print(f"{v:d},itime_t,{dt:f}")
-            print(f"{v:d},avg_insert_t,{dt / float(count):f}")
+            if count > 0:
+                print(f"{v:d},avg_insert_t,{dt / float(count):f}")
             for k, val in rt.stats.items():
                 print(f"{v:d},{k},{val:f}")
             for k in rt.stats.keys():

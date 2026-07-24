@@ -20,9 +20,10 @@ if __name__ == "__main__":
             t = time.perf_counter()
 
             dt = t - interval_start
-            count = max(v - last_v, 1)
+            count = v - last_v
             print(f"{v:d},itime_t,{dt:f}")
-            print(f"{v:d},avg_insert_t,{dt / float(count):f}")
+            if count > 0:
+                print(f"{v:d},avg_insert_t,{dt / float(count):f}")
             # print("%d,%s,%d" % (v, "max_depth", rt.node.max_depth()))
             # print("%d,%s,%d" % (v, "mean_depth", rt.node.mean_depth()))
 
