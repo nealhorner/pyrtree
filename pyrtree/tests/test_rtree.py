@@ -1,3 +1,4 @@
+import array
 import collections
 import math
 import random
@@ -5,6 +6,7 @@ import unittest as ut
 
 from pyrtree import Rect, RTree
 from pyrtree.rect import NullRect
+from pyrtree.rtree import center_of_gravity, closest, k_means_cluster, silhouette_coeff
 
 from .testutil import take
 
@@ -152,10 +154,70 @@ class RectangleTests(ut.TestCase):
             out = G.disjointWith(r)
             self.assertFalse(r.does_contain(out))
 
+    def testSwappedConstruction(self):
+        r = Rect(10, 10, 0, 0)
+        self.assertTrue(r.swapped_x)
+        self.assertTrue(r.swapped_y)
+        self.assertEqual(r.coords(), (0, 0, 10, 10))
+
+        r2 = Rect(0, 0, 10, 10)
+        self.assertFalse(r2.swapped_x)
+        self.assertFalse(r2.swapped_y)
+
+    def testGrow(self):
+        r = Rect(0, 0, 10, 10).grow(4)
+        self.assertEqual(r.coords(), (-2, -2, 12, 12))
+
+    def testUnionPoint(self):
+        r = Rect(0, 0, 10, 10)
+        u = r.union_point((15, -5))
+        self.assertTrue(u.does_contain(r))
+        self.assertTrue(u.does_containpoint((15, -5)))
+        self.assertEqual(u.coords(), (0, -5, 15, 10))
+
+    def testDiagonal(self):
+        r = Rect(0, 0, 3, 4)
+        self.assertEqual(r.diagonal_sq(), 25)
+        self.assertEqual(r.diagonal(), 5)
+        self.assertEqual(NullRect.diagonal_sq(), 0)
+        self.assertEqual(NullRect.diagonal(), 0)
+
+    def testOverlap(self):
+        ra = Rect(0, 0, 10, 10)
+        rb = Rect(5, 5, 15, 15)
+        self.assertEqual(ra.overlap(rb), ra.intersect(rb).area())
+        self.assertEqual(ra.overlap(rb), 25)
+
+    def testWriteRawCoords(self):
+        r = Rect(1, 2, 8, 9)
+        buf = array.array("d", [0, 0, 0, 0])
+        r.write_raw_coords(buf, 0)
+        self.assertEqual(list(buf), [1, 2, 8, 9])
+
+        # write_raw_coords round-trips the original (possibly swapped)
+        # constructor args -- that's how the swap flags get persisted
+        # without extra storage (see class docstring).
+        swapped = Rect(8, 9, 1, 2)
+        buf2 = array.array("d", [0, 0, 0, 0])
+        swapped.write_raw_coords(buf2, 0)
+        self.assertEqual(list(buf2), [8, 9, 1, 2])
+
+    def testNullRectUnion(self):
+        r = Rect(0, 0, 10, 10)
+        self.assertEqual(r.union(NullRect).coords(), r.coords())
+        self.assertEqual(NullRect.union(r).coords(), r.coords())
+        self.assertEqual(NullRect.area(), 0)
+
 
 class RTreeTest(ut.TestCase):
     def testCons(self):
         RTree()
+
+    def testEmptyTree(self):
+        tree = RTree()
+        self.assertEqual([r for r in tree.query_point((5, 5)) if r.is_leaf()], [])
+        self.assertEqual([r for r in tree.query_rect(Rect(0, 0, 10, 10)) if r.is_leaf()], [])
+        self.assertEqual([r for r in tree.walk(lambda x, y: True) if r.is_leaf()], [])
 
     def invariants(self, tree):
         self.assertEqual(tree.cursor.index, 0)
@@ -315,6 +377,83 @@ class RTreeTest(ut.TestCase):
         extra = TstO(G.rect())
         tree.insert(extra, extra.rect)
         self.invariants(tree)
+
+
+class _FakeNode:
+    """Minimal stand-in for a _NodeCursor: the clustering functions below
+    only ever touch .index and .rect."""
+
+    def __init__(self, index, rect):
+        self.index = index
+        self.rect = rect
+
+
+class ClusteringTests(ut.TestCase):
+    """The k-means clustering used by RTree._balance() has no coverage
+    from the RTree insert/query tests, since it's only exercised
+    indirectly once a node overflows. Test it directly instead."""
+
+    def testCenterOfGravity(self):
+        node = _FakeNode(0, Rect(0, 0, 2, 2))
+        self.assertEqual(center_of_gravity([node]), (1.0, 1.0))
+
+    def testClosest(self):
+        centroids = [(0.0, 0.0), (100.0, 100.0)]
+        near_first = _FakeNode(0, Rect(1, 1, 2, 2))
+        near_second = _FakeNode(1, Rect(99, 99, 101, 101))
+        self.assertEqual(closest(centroids, near_first), 0)
+        self.assertEqual(closest(centroids, near_second), 1)
+
+    def testKMeansClusterSeparatesDistinctGroups(self):
+        root = RTree()
+        near_origin = [
+            _FakeNode(i, Rect(i * 0.1, i * 0.1, i * 0.1 + 1, i * 0.1 + 1)) for i in range(4)
+        ]
+        far_away = [
+            _FakeNode(
+                100 + i,
+                Rect(100 + i * 0.1, 100 + i * 0.1, 101 + i * 0.1, 101 + i * 0.1),
+            )
+            for i in range(4)
+        ]
+        nodes = near_origin + far_away
+
+        clusters = k_means_cluster(root, 2, nodes)
+
+        # k_means_cluster drops empty groups during convergence, so it can
+        # legitimately return fewer than k clusters -- don't assert an exact
+        # count. What matters is that well-separated points never end up
+        # mixed together, which is checked below.
+        self.assertLessEqual(len(clusters), 2)
+        all_indices = sorted(n.index for c in clusters for n in c)
+        self.assertEqual(all_indices, sorted(n.index for n in nodes))
+
+        origin_indices = {n.index for n in near_origin}
+        far_indices = {n.index for n in far_away}
+        for cluster in clusters:
+            cluster_indices = {n.index for n in cluster}
+            self.assertTrue(
+                cluster_indices <= origin_indices or cluster_indices <= far_indices,
+                f"cluster {cluster_indices!r} mixed the two separated groups",
+            )
+
+    def testSilhouetteCoeffHighForWellSeparatedClusters(self):
+        near_origin = [
+            _FakeNode(i, Rect(i * 0.1, i * 0.1, i * 0.1 + 1, i * 0.1 + 1)) for i in range(4)
+        ]
+        far_away = [
+            _FakeNode(
+                100 + i,
+                Rect(100 + i * 0.1, 100 + i * 0.1, 101 + i * 0.1, 101 + i * 0.1),
+            )
+            for i in range(4)
+        ]
+        score = silhouette_coeff([near_origin, far_away], {})
+        self.assertTrue(score > 0.8, f"expected a high score, got {score}")
+
+    def testSilhouetteCoeffSingleClusterIsOne(self):
+        node = _FakeNode(0, Rect(0, 0, 1, 1))
+        self.assertEqual(silhouette_coeff([[node]], {}), 1.0)
 
 
 if __name__ == "__main__":
