@@ -386,9 +386,16 @@ class RTreeTest(ut.TestCase):
         random.shuffle(xs)
         to_remove, to_keep = xs[:100], xs[100:]
 
+        # delete() is documented to leave ancestor bounds as-is rather than
+        # shrinking them back down -- confirm the root's rect really is
+        # left untouched by a deletion that doesn't empty the tree.
+        root_rect_before = tree.cursor.rect
+
         for x in to_remove:
             self.assertTrue(tree.delete(x, x.rect))
         self.invariants(tree)
+
+        self.assertEqual(tree.cursor.rect.coords(), root_rect_before.coords())
 
         remaining = {r.leaf_obj() for r in tree.walk(lambda x, y: True) if r.is_leaf()}
         self.assertEqual(remaining, set(to_keep))
@@ -418,6 +425,18 @@ class RTreeTest(ut.TestCase):
         self.assertTrue(tree.delete(present, present.rect))
         # A second delete of the same (now-removed) item fails.
         self.assertFalse(tree.delete(present, present.rect))
+
+    def testDeleteDuplicateEntriesRemovedOneAtATime(self):
+        """Inserting the same (object, rect) pair twice creates two
+        separate leaves; delete() only ever removes one match per call."""
+        tree = RTree()
+        dup = TstO(Rect(0, 0, 1, 1))
+        tree.insert(dup, dup.rect)
+        tree.insert(dup, dup.rect)
+
+        self.assertTrue(tree.delete(dup, dup.rect))
+        self.assertTrue(tree.delete(dup, dup.rect))
+        self.assertFalse(tree.delete(dup, dup.rect))
 
     def testDeleteRequiresExactRectMatchNotJustContainment(self):
         """A rect that's merely *contained within* the leaf's actual rect
