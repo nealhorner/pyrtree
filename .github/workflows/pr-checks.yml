@@ -1,0 +1,68 @@
+name: PR checks
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Unit tests (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v3
+      - name: Run unit tests
+        run: uv run --extra dev --python ${{ matrix.python-version }} pytest
+
+  format:
+    name: Lint & formatting check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync --extra dev
+      - name: Check formatting
+        run: uv run ruff format --check --diff .
+      - name: Lint
+        run: uv run ruff check .
+
+  version-check:
+    name: Package version bump
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Ensure pyproject.toml version was incremented
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          base_version=$(git show "origin/${BASE_REF}:pyproject.toml" | grep -m1 -oE '^version\s*=\s*"[^"]+"' | grep -oE '[0-9][^"]*')
+          pr_version=$(grep -m1 -oE '^version\s*=\s*"[^"]+"' pyproject.toml | grep -oE '[0-9][^"]*')
+
+          echo "Base branch version: $base_version"
+          echo "PR branch version:   $pr_version"
+
+          python3 - "$base_version" "$pr_version" <<'EOF'
+          import sys
+
+          def parse(v):
+              return tuple(int(p) for p in v.split("."))
+
+          base, pr = parse(sys.argv[1]), parse(sys.argv[2])
+          if pr <= base:
+              sys.exit(
+                  f"pyproject.toml version must be incremented: base={sys.argv[1]} pr={sys.argv[2]}"
+              )
+          EOF

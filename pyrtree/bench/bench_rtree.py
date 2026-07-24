@@ -1,52 +1,68 @@
 import gc
-# TODO: path hackery.
-if __name__ == "__main__":
-    import sys, os
-    mypath = os.path.dirname(sys.argv[0])
-    sys.path.append(os.path.abspath(os.path.join(mypath, "../../")))
-
-from pyrtree.rtree import RTree
-from pyrtree.tests.test_rtree import RectangleGen,TstO
-
-import time
+import math
 
 # TODO: make these command-line params.
 import os
+import time
 
-ITER=1000000 # one meeelion
+from pyrtree.rtree import RTree
+from pyrtree.tests.test_rtree import RectangleGen, TstO
+
+ITER = 1000000  # one meeelion
 if "TEST_ITER" in os.environ:
-    ITER=int(os.getenv("TEST_ITER"))
-INTERVAL=1000 # log at every 1k
-if "TEST_INTERVAL" in os.environ:
-    INTERVAL=int(os.getenv("TEST_INTERVAL"))
+    ITER = int(os.getenv("TEST_ITER"))
+GROWTH = 2.0  # log points grow by this factor: 0, 1, 2, 4, 8, ...
+if "TEST_GROWTH" in os.environ:
+    GROWTH = float(os.getenv("TEST_GROWTH"))
+
+
+class ExponentialLogSchedule:
+    """True at v = 0, 1, 2, 4, 8, ... (each point `growth`x the last)."""
+
+    def __init__(self, growth):
+        if not math.isfinite(growth) or growth <= 1:
+            raise ValueError("growth must be finite and greater than 1")
+        self.growth = growth
+        self.next_log = 0
+
+    def hit(self, v):
+        if v != self.next_log:
+            return False
+        self.next_log = (
+            1 if self.next_log == 0 else max(self.next_log + 1, int(self.next_log * self.growth))
+        )
+        return True
 
 
 if __name__ == "__main__":
-    gc.disable() # FFFFUUUUUUUUUUU
+    gc.disable()  # FFFFUUUUUUUUUUU
     G = RectangleGen()
     rt = RTree()
-    start = time.clock()
-    interval_start = time.clock()
+    schedule = ExponentialLogSchedule(GROWTH)
+    interval_start = time.perf_counter()
+    last_v = 0
     for v in range(ITER):
-        if 0 == (v % INTERVAL):
+        if schedule.hit(v):
             # interval time taken, total time taken, # rects, cur max depth
-            t = time.clock()
-            
+            t = time.perf_counter()
+
             dt = t - interval_start
-            print("%d,%s,%f" % (v, "itime_t", dt))
-            print("%d,%s,%f" % (v, "avg_insert_t", (dt/float(INTERVAL))))
-            for (k,val) in rt.stats.iteritems():
-                print("%d,%s,%f" % (v, k, val))
+            count = v - last_v
+            print(f"{v:d},itime_t,{dt:f}")
+            if count > 0:
+                print(f"{v:d},avg_insert_t,{dt / float(count):f}")
+            for k, val in rt.stats.items():
+                print(f"{v:d},{k},{val:f}")
             for k in rt.stats.keys():
-                if k.endswith("_f"): rt.stats[k] = 0.0
+                if k.endswith("_f"):
+                    rt.stats[k] = 0.0
 
+            # print("%d,%s,%d" % (v, "max_depth", rt.node.max_depth()))
+            # print("%d,%s,%d" % (v, "mean_depth", rt.node.mean_depth()))
 
-            #print("%d,%s,%d" % (v, "max_depth", rt.node.max_depth()))
-            #print("%d,%s,%d" % (v, "mean_depth", rt.node.mean_depth()))
-
-            interval_start = time.clock()
+            interval_start = time.perf_counter()
+            last_v = v
         o = TstO(G.rect(0.000001))
-        rt.insert(v,o.rect)
+        rt.insert(v, o.rect)
 
     # Done.
-
