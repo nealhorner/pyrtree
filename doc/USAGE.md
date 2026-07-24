@@ -2,8 +2,8 @@
 
 `pyrtree` is a pure-Python implementation of an R-Tree spatial index. It has no
 C library dependencies, exposes internal nodes for custom traversal, and is
-aimed at in-memory **insert-then-query** workloads over 2-dimensional data
-(updates and persistence are not supported).
+aimed at in-memory **insert/delete-then-query** workloads over 2-dimensional
+data (persistence to disk is not supported).
 
 ## Installation
 
@@ -79,6 +79,22 @@ t.insert(some_object, Rect(min_x, min_y, max_x, max_y))
   from queries.
 - The tree automatically rebalances (using k-means clustering of child
   rectangles) whenever a node overflows `MAXCHILDREN` (10) children.
+
+## Deleting Objects
+
+```python
+t.delete(some_object, Rect(min_x, min_y, max_x, max_y))
+```
+
+- Pass the same object and rectangle given to `insert()` -- the rectangle is
+  used to descend straight to the right part of the tree rather than
+  scanning every leaf, the same way `insert()` uses it. The stored object is
+  matched with `==`.
+- Returns `True` if a matching leaf was found and removed, `False`
+  otherwise.
+- Ancestor bounding rectangles are left as-is rather than shrunk back down
+  after a delete -- they stay correct (if a little looser than optimal),
+  since a superset of the true bounds still safely prunes queries.
 
 ## Querying
 
@@ -162,12 +178,18 @@ print(hits)  # ['a', 'c'] (order not guaranteed)
 region = Rect(0, 0, 4, 4)
 hits = [n.leaf_obj() for n in t.query_rect(region) if n.is_leaf()]
 print(hits)  # ['a', 'c'] (order not guaranteed)
+
+# Delete "b" -- pass the same object and rect used to insert it.
+t.delete("b", Rect(5, 5, 8, 8))
+hits = [n.leaf_obj() for n in t.query_rect(region) if n.is_leaf()]
+print(hits)  # ['a', 'c'] -- "b" never overlapped `region` anyway
 ```
 
 ## Limitations
 
 - **2D only** — the index supports two-dimensional rectangles.
-- **Insert-only** — there is no API for deleting or updating entries.
+- **No update** — there is no API for moving/resizing an existing entry
+  in-place; delete it and re-insert instead.
 - **In-memory only** — there is currently no way to persist an index to disk.
 
 ## Running Tests

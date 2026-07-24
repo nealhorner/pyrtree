@@ -376,6 +376,70 @@ class RTreeTest(ut.TestCase):
         tree.insert(extra, extra.rect)
         self.invariants(tree)
 
+    def testDelete(self):
+        xs = [TstO(r) for r in take(200, G.rect, 0.1)]
+        tree = RTree()
+        for x in xs:
+            tree.insert(x, x.rect)
+        self.invariants(tree)
+
+        random.shuffle(xs)
+        to_remove, to_keep = xs[:100], xs[100:]
+
+        for x in to_remove:
+            self.assertTrue(tree.delete(x, x.rect))
+        self.invariants(tree)
+
+        remaining = {r.leaf_obj() for r in tree.walk(lambda x, y: True) if r.is_leaf()}
+        self.assertEqual(remaining, set(to_keep))
+
+        for x in to_remove:
+            qp = G.pointInside(x.rect)
+            rs = [r.leaf_obj() for r in tree.query_point(qp)]
+            self.assertFalse(x in rs)
+
+        for x in to_keep:
+            qp = G.pointInside(x.rect)
+            rs = [r.leaf_obj() for r in tree.query_point(qp)]
+            self.assertTrue(x in rs)
+
+    def testDeleteMissingReturnsFalse(self):
+        tree = RTree()
+        present = TstO(Rect(0, 0, 1, 1))
+        tree.insert(present, present.rect)
+
+        absent = TstO(Rect(5, 5, 6, 6))
+        self.assertFalse(tree.delete(absent, absent.rect))
+
+        # Right object, wrong rect -- the rect is used to descend, so a
+        # mismatched rect must not find the leaf either.
+        self.assertFalse(tree.delete(present, Rect(5, 5, 6, 6)))
+
+        self.assertTrue(tree.delete(present, present.rect))
+        # A second delete of the same (now-removed) item fails.
+        self.assertFalse(tree.delete(present, present.rect))
+
+    def testDeleteThenInsertStillWorks(self):
+        """Deleting must not corrupt the tree's ability to keep growing
+        (exercises rebalancing after nodes have been unlinked)."""
+        tree = RTree()
+        xs = [TstO(r) for r in take(50, G.rect, 0.1)]
+        for x in xs:
+            tree.insert(x, x.rect)
+
+        for x in xs[:25]:
+            self.assertTrue(tree.delete(x, x.rect))
+        self.invariants(tree)
+
+        more = [TstO(r) for r in take(50, G.rect, 0.1)]
+        for x in more:
+            tree.insert(x, x.rect)
+            self.invariants(tree)
+
+        expected = set(xs[25:]) | set(more)
+        actual = {r.leaf_obj() for r in tree.walk(lambda x, y: True) if r.is_leaf()}
+        self.assertEqual(actual, expected)
+
 
 class _FakeNode:
     """Minimal stand-in for a _NodeCursor: the clustering functions below

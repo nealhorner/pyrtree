@@ -13,7 +13,7 @@ This is a pure python implementation of an RTree spatial index -- with no C libr
 
 I wrote it with the following reasons in mind: * Pure cross-platform python; no C library dependencies. * Access to internal nodes in the tree, allowing for custom traversal strategies. * BSD license
 
-The current version targets in-memory insert-then-query workloads -- updates and persistence are not implemented yet -- and performs quite well at doing so. Besides those limitations, the current version only implements a 2-dimensional index. I'm not sure if this will change: R-tree performance drops quickly as you add dimensions, and I anticipate the largest uses of this library will be by GIS developers, where two-dimensional datasets are king. Planned enhancement: saving and loading the index to disk.
+The current version targets in-memory insert/delete-then-query workloads -- persistence is not implemented yet -- and performs quite well at doing so. Besides that limitation, the current version only implements a 2-dimensional index. I'm not sure if this will change: R-tree performance drops quickly as you add dimensions, and I anticipate the largest uses of this library will be by GIS developers, where two-dimensional datasets are king. Planned enhancement: saving and loading the index to disk.
 
 # API
 ```
@@ -22,6 +22,9 @@ from pyrtree import RTree,Rect
 ... inserting: 
 t = RTree()
 t.insert(some_kind_of_object,Rect(min_x,min_y,max_x,max_y))
+
+... deleting (same object + rect used to insert it):
+t.delete(some_kind_of_object,Rect(min_x,min_y,max_x,max_y))
 
 ... querying:
 point_res = t.query_point( (x,y) )

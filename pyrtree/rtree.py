@@ -51,6 +51,29 @@ class RTree:
         self.cursor.insert(o, orect)
         assert self.cursor.index == 0
 
+    def delete(self, o, orect):
+        """Remove a previously-inserted object from the index.
+
+        `orect` must be the same rectangle passed to `insert()` for `o` --
+        it's used to descend directly to the relevant part of the tree,
+        the same way `insert()` does, instead of scanning every leaf. The
+        stored object is matched against `o` with `==`.
+
+        Returns True if a matching leaf was found and removed, False
+        otherwise. If more than one leaf matches (e.g. the same object was
+        inserted more than once with the same rect), only one is removed.
+
+        The removed leaf's slot is simply unlinked from the tree; ancestor
+        bounding rectangles are left as-is rather than shrunk back down.
+        They stay correct (if a little looser than optimal) since a
+        superset of the true bounds still safely prunes queries -- it just
+        means some queries may descend into a node that no longer actually
+        contains anything relevant.
+        """
+        removed = self.cursor._delete(o, orect)
+        assert self.cursor.index == 0
+        return removed
+
     def query_rect(self, r):
         yield from self.cursor.lift().query_rect(r)
 
@@ -326,6 +349,65 @@ class _NodeCursor:
                 self.rect = self.rect.union(leafrect)
                 self._save_back()
                 self._become(child)  # recurse.
+
+    def _delete(self, o, orect):
+        """Find the leaf matching (o, orect) somewhere under self and
+        unlink it from its parent's child list. Iterative (explicit stack
+        of internal-node indices) rather than recursive, in the same style
+        as query_rect/query_point.
+
+        Pruning descends into a node only if its rect *contains* orect
+        (not just intersects it): every ancestor's rect is a union that
+        was built to include the original leaf's rect exactly, so this
+        can't miss the target, and -- unlike an intersection test -- it
+        stays correct for degenerate (zero-area) rects too.
+        """
+        root = self.root
+        rpool = self.rpool
+        npool = self.npool
+        leaf_flags = root.node_leaf_flags
+        null_flags = root.node_null_flags
+        leaf_pool = root.leaf_pool
+
+        ox, oy, oxx, oyy = orect.x, orect.y, orect.xx, orect.yy
+
+        stack = [self.index]
+        while stack:
+            idx = stack.pop()
+
+            prev = 0
+            ci = npool[idx * 2 + 1]
+            while ci != 0:
+                next_ci = npool[ci * 2]
+
+                if not null_flags[ci]:
+                    ri = ci * 4
+                    contains = (
+                        rpool[ri] <= ox
+                        and rpool[ri + 1] <= oy
+                        and rpool[ri + 2] >= oxx
+                        and rpool[ri + 3] >= oyy
+                    )
+                else:
+                    contains = False
+
+                if contains:
+                    if leaf_flags[ci]:
+                        leaf_idx = npool[ci * 2 + 1]
+                        if leaf_pool[leaf_idx] == o:
+                            if prev == 0:
+                                npool[idx * 2 + 1] = next_ci
+                            else:
+                                npool[prev * 2] = next_ci
+                            leaf_pool[leaf_idx] = None
+                            return True
+                    else:
+                        stack.append(ci)
+
+                prev = ci
+                ci = next_ci
+
+        return False
 
     def _balance(self):
         if self.nchildren() <= MAXCHILDREN:
