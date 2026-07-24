@@ -7,8 +7,11 @@ MAX_KMEANS=5
 import math, random, sys
 import time
 import array
+import logging
 
 from .rect import Rect, union_all, NullRect
+
+logger = logging.getLogger(__name__)
 
 class RTree(object):
     def __init__(self):
@@ -397,9 +400,8 @@ def k_means_cluster(root, k, nodes):
 
         for c in clusters:
             if (len(c) == 0):
-                print("Errorrr....")
-                print("Nodes: %d, centers: %s" % (len(ns),
-                                                              repr(cluster_centers)))
+                logger.error("Errorrr....")
+                logger.error("Nodes: %d, centers: %s", len(ns), repr(cluster_centers))
 
             assert(len(c) > 0)
             
