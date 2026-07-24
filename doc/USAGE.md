@@ -17,7 +17,7 @@ uv sync --extra dev      # install pyrtree + dev dependencies (pytest, ruff) int
 Or install it as a regular dependency with pip:
 
 ```bash
-pip install .
+python -m pip install .
 ```
 
 ## Quick Start
@@ -165,7 +165,7 @@ print(hits)  # ['a', 'c'] (order not guaranteed)
 
 ## Limitations
 
-- **2D only** — the index only supports two-dimensional rectangles.
+- **2D only** — the index supports two-dimensional rectangles.
 - **Insert-only** — there is no API for deleting or updating entries.
 - **In-memory only** — there is currently no way to persist an index to disk.
 
