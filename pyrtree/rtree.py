@@ -35,6 +35,7 @@ class RTree:
         self.rect_pool = array.array("d")
         self.node_pool = array.array("L")
         self.node_leaf_flags = array.array("B")
+        self.node_null_flags = array.array("B")
         self.leaf_pool = []  # leaf objects.
 
         self.cursor = _NodeCursor.create(self, NullRect)
@@ -44,6 +45,7 @@ class RTree:
             self.rect_pool.extend([0, 0, 0, 0] * idx)
             self.node_pool.extend([0, 0] * idx)
             self.node_leaf_flags.extend([0] * idx)
+            self.node_null_flags.extend([0] * idx)
 
     def insert(self, o, orect):
         self.cursor.insert(o, orect)
@@ -145,7 +147,7 @@ class _NodeCursor:
         xx = rp[recti + 2]
         yy = rp[recti + 3]
 
-        if x == 0.0 and y == 0.0 and xx == 0.0 and yy == 0.0:
+        if self.root.node_null_flags[index]:
             self.rect = NullRect
         else:
             self.rect = Rect(x, y, xx, yy)
@@ -184,11 +186,13 @@ class _NodeCursor:
 
         if self.rect is not NullRect:
             self.rect.write_raw_coords(rp, recti)
+            self.root.node_null_flags[self.index] = 0
         else:
             rp[recti] = 0
             rp[recti + 1] = 0
             rp[recti + 2] = 0
             rp[recti + 3] = 0
+            self.root.node_null_flags[self.index] = 1
 
         self.npool[nodei] = self.next_sibling
         self.npool[nodei + 1] = self.first_child

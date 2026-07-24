@@ -230,6 +230,28 @@ class RTreeTest(ut.TestCase):
             tree.insert(x, x.rect)
             self.invariants(tree)
 
+    def testOriginPointNotConfusedWithNullRect(self):
+        """A genuine zero-area rect at the exact origin must round-trip as a
+        real Rect, not silently collapse into the NullRect sentinel (which
+        also stores raw coordinates (0,0,0,0))."""
+        tree = RTree()
+        origin = TstO(Rect(0, 0, 0, 0))
+        tree.insert(origin, origin.rect)
+        for i in range(1, 15):
+            x = TstO(Rect(i, i, i + 1, i + 1))
+            tree.insert(x, x.rect)
+        self.invariants(tree)
+
+        origin_leaf_rects = [
+            n.rect for n in tree.walk(lambda x, y: True) if n.is_leaf() and n.leaf_obj() is origin
+        ]
+        self.assertEqual(len(origin_leaf_rects), 1)
+        self.assertTrue(origin_leaf_rects[0] is not NullRect)
+
+        # The origin point must widen the tree's bounding box, not get
+        # dropped from it as if it were absent (NullRect).
+        self.assertTrue(tree.cursor.rect.does_containpoint((0, 0)))
+
     def testPointQuery(self):
         xs = [TstO(r) for r in take(1000, G.rect, 0.01)]
         tree = RTree()

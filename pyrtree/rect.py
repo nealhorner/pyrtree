@@ -74,7 +74,11 @@ class Rect:
         return self.does_containpoint((o.x, o.y)) and self.does_containpoint((o.xx, o.yy))
 
     def does_intersect(self, o):
-        return self.intersect(o).area() > 0
+        if self is NullRect or o is NullRect:
+            return False
+        w = min(self.xx, o.xx) - max(self.x, o.x)
+        h = min(self.yy, o.yy) - max(self.y, o.y)
+        return w > 0 and h > 0
 
     def does_containpoint(self, p):
         x, y = p

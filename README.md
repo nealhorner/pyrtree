@@ -38,7 +38,7 @@ They take the form of trees of rectangles where each node's rectangle contains t
 
 Requires Python >= 3.10 (developed and tested against 3.14) and [uv](https://docs.astral.sh/uv/).
 
-```
+```shell
 uv sync --extra dev      # install dev dependencies (pytest, ruff) into .venv
 uv run pytest            # run the test suite
 uv run ruff check .      # lint
@@ -48,7 +48,7 @@ uv run ruff format .     # format
 The `bench_libspatial.py` benchmark compares against the `Rtree` package, which wraps the
 libspatialindex C library. It's an optional extra since it needs that system library installed:
 
-```
+```shell
 uv sync --extra bench-compare
 ```
 

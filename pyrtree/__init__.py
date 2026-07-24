@@ -1,4 +1,4 @@
-__all__ = ["rtree", "rect"]
+__all__ = ["Rect", "RTree", "rect", "rtree"]
 
 from . import rect, rtree
 
