@@ -4,6 +4,8 @@ An R-Tree implementation
 Taken from https://code.google.com/archive/p/pyrtree/source/default/source
 (No way to automatically move the versioned source code from code.google.com, so this is copied)
 
+See [doc/USAGE.md](doc/USAGE.md) for a full usage guide.
+
 Here's the original project description (https://code.google.com/archive/p/pyrtree/):
 
 # pyrtree
