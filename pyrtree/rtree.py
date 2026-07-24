@@ -58,7 +58,7 @@ class RTree:
         yield from self.cursor.lift().query_point(p)
 
     def walk(self, pred):
-        return self.cursor.lift().walk(pred)
+        yield from self.cursor.lift().walk(pred)
 
 
 class _NodeCursor:
