@@ -2,13 +2,10 @@
 # see doc/ref/r-tree-clustering-split-algo.pdf
 
 import array
-import logging
 import random
 import time
 
 from .rect import NullRect, Rect, union_all
-
-logger = logging.getLogger(__name__)
 
 MAXCHILDREN = 10
 MAX_KMEANS = 5
@@ -511,15 +508,12 @@ def k_means_cluster(root, k, nodes):
             idx = closest(cluster_centers, n)
             clusters[idx].append(n)
 
-        # FIXME HACK TODO: is it okay for there to be empty clusters?
+        # Two initial centers can end up close enough that one never becomes
+        # the nearest center for any node, leaving it with no members. Drop
+        # those empty clusters rather than keeping a hollow entry around --
+        # this yields fewer than `k` clusters, which is fine since callers
+        # only rely on there being at least one.
         clusters = [c for c in clusters if len(c) > 0]
-
-        for c in clusters:
-            if len(c) == 0:
-                logger.error("Errorrr....")
-                logger.error("Nodes: %d, centers: %r", len(ns), cluster_centers)
-
-            assert len(c) > 0
 
         new_cluster_centers = [center_of_gravity(c) for c in clusters]
         if new_cluster_centers == cluster_centers:
