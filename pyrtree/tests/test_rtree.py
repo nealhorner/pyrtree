@@ -419,6 +419,21 @@ class RTreeTest(ut.TestCase):
         # A second delete of the same (now-removed) item fails.
         self.assertFalse(tree.delete(present, present.rect))
 
+    def testDeleteRequiresExactRectMatchNotJustContainment(self):
+        """A rect that's merely *contained within* the leaf's actual rect
+        must not match -- only an exact rect match should. Otherwise
+        delete(o, some_sub_rect_of_the_real_rect) could remove the wrong
+        entry (or the right one for the wrong reason) when rects nest."""
+        tree = RTree()
+        outer = TstO(Rect(0, 0, 10, 10))
+        tree.insert(outer, outer.rect)
+
+        sub_rect = Rect(2, 2, 4, 4)  # strictly contained within outer.rect
+        self.assertFalse(tree.delete(outer, sub_rect))
+
+        # The real entry is still there and removable with its exact rect.
+        self.assertTrue(tree.delete(outer, outer.rect))
+
     def testDeleteThenInsertStillWorks(self):
         """Deleting must not corrupt the tree's ability to keep growing
         (exercises rebalancing after nodes have been unlinked)."""

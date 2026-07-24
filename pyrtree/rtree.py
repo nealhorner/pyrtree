@@ -55,9 +55,12 @@ class RTree:
         """Remove a previously-inserted object from the index.
 
         `orect` must be the same rectangle passed to `insert()` for `o` --
-        it's used to descend directly to the relevant part of the tree,
-        the same way `insert()` does, instead of scanning every leaf. The
-        stored object is matched against `o` with `==`.
+        it's used both to descend directly to the relevant part of the
+        tree (the same way `insert()` does, instead of scanning every
+        leaf) and as an exact match requirement: a leaf is only removed if
+        its stored rect equals `orect` exactly, not merely if it's
+        contained within it. The stored object is matched against `o`
+        with `==`.
 
         Returns True if a matching leaf was found and removed, False
         otherwise. If more than one leaf matches (e.g. the same object was
@@ -360,7 +363,11 @@ class _NodeCursor:
         (not just intersects it): every ancestor's rect is a union that
         was built to include the original leaf's rect exactly, so this
         can't miss the target, and -- unlike an intersection test -- it
-        stays correct for degenerate (zero-area) rects too.
+        stays correct for degenerate (zero-area) rects too. Containment is
+        only used to decide whether to keep descending, though: the leaf
+        itself is only removed if its stored rect *exactly* matches orect
+        (not just contains it), so a leaf with a larger/different rect for
+        an `==`-equal object is never mistakenly deleted.
         """
         root = self.root
         rpool = self.rpool
@@ -394,7 +401,13 @@ class _NodeCursor:
                 if contains:
                     if leaf_flags[ci]:
                         leaf_idx = npool[ci * 2 + 1]
-                        if leaf_pool[leaf_idx] == o:
+                        if (
+                            leaf_pool[leaf_idx] == o
+                            and rpool[ri] == ox
+                            and rpool[ri + 1] == oy
+                            and rpool[ri + 2] == oxx
+                            and rpool[ri + 3] == oyy
+                        ):
                             if prev == 0:
                                 npool[idx * 2 + 1] = next_ci
                             else:
