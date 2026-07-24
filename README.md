@@ -11,21 +11,22 @@ This project was originally taken from Dan Shoutis's [pyrtree](https://code.goog
 See [doc/USAGE.md](doc/USAGE.md) for a full usage guide.
 
 ### API
-```
-from pyrtree import RTree,Rect
+```python
+from pyrtree import RTree, Rect
 
-... inserting: 
+# inserting
 t = RTree()
-t.insert(some_kind_of_object,Rect(min_x,min_y,max_x,max_y))
+t.insert(some_kind_of_object, Rect(min_x, min_y, max_x, max_y))
 
-... querying:
-point_res = t.query_point( (x,y) )
-rect_res = t.query_rect( Rect(x,y,xx,yy) )
-
+# querying
+point_res = t.query_point((x, y))
+rect_res = t.query_rect(Rect(x1, y1, x2, y2))
 ```
-IMPORTANT: Query results include intermediate nodes which are invalidated as they get iterated over: so if you only want your leaf objects back: (a near-future TODO: a convenience wrapper) real_point_res = [r.leaf_obj() for r in t.query_point( (x,y) ) if r.is_leaf()] ```
+
+IMPORTANT: Query results include intermediate nodes which are invalidated as they get iterated over: so if you only want your leaf objects back: (a near-future TODO: a convenience wrapper) `real_point_res = [r.leaf_obj() for r in t.query_point((x, y)) if r.is_leaf()]`
 
 ## What is an RTree?
+
 An R-tree is a spatial index over axis-aligned rectangles. (The sides of the rectangles are parallel to the X and Y axes.) They're used heavily in GIS as a way to index geospatial data.
 
 They take the form of trees of rectangles where each node's rectangle contains the rectangle of all its children. The challenge is in deciding how to group rectangles in order to arrive at a well-balanced tree; pyrtree uses k-means clustering to do this. (S. Brakatsoulas, D. Pfoser, and Y. Theodoridis. "Revisiting R-Tree Construction Principles", Advances in Databases and Information Systems 2435 (2002): 17-24)
