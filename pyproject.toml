@@ -8,7 +8,8 @@ version = "0.51.3"
 description = "2-Dimensional RTree spatial index"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "BSD" }
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
 authors = [
     { name = "Dan Shoutis", email = "dan@shoutis.org" },
 ]
