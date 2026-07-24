@@ -70,13 +70,17 @@ access to internal tree nodes. As a rough guide, on an Apple M1 Max (Python 3.14
 
 | Operation      | Throughput          | Latency      |
 |----------------|----------------------|--------------|
-| Insert         | ~15,800 inserts/sec  | ~63 us/insert |
-| Point query    | ~4,700 queries/sec   | ~213 us/query |
-| Rect query     | ~3,000 queries/sec   | ~336 us/query |
+| Insert         | ~19,000 inserts/sec  | ~53 us/insert |
+| Point query    | ~10,300 queries/sec  | ~97 us/query |
+| Rect query     | ~6,300 queries/sec   | ~160 us/query |
 
 These numbers are illustrative, not guarantees -- actual performance depends heavily on your
 hardware, Python version, and the size/distribution of the rectangles you're indexing. Query
-latency in particular grows with how much of the tree a given query overlaps.
+latency in particular grows with how much of the tree a given query overlaps. They're derived
+from the original M1 Max/Python 3.14 measurements above, scaled by the ~2.2x/~2.1x/~1.2x
+speedups reported for query_point/query_rect/insert in the subsequent hot-path optimization --
+not a fresh from-scratch benchmark run, so treat them as a reasonable estimate rather than an
+exact measurement.
 
 To benchmark on your own machine and data:
 
