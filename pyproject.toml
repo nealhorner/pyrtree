@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pyrtree"
+version = "0.51.1"
+description = "2-Dimensional RTree spatial index"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "BSD" }
+authors = [
+    { name = "Dan Shoutis", email = "dan@shoutis.org" },
+]
+
+[project.optional-dependencies]
+dev = ["ruff", "pytest"]
+bench-compare = ["Rtree"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["pyrtree"]
+
+[tool.pytest.ini_options]
+testpaths = ["pyrtree/tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
