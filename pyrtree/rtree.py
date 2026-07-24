@@ -115,28 +115,100 @@ class _NodeCursor:
         self.next_sibling = next_sibling
         self.first_child = first_child
 
+    @classmethod
+    def _load(cls, root, index):
+        """Cheaply materialize the cursor sitting at 'index'."""
+        c = cls(root, 0, NullRect, 0, 0)
+        c._become(index)
+        return c
+
     def walk(self, predicate):
-        if predicate(self, self.leaf_obj()):
-            yield self
-            if not self.is_leaf():
-                for c in self.children():
-                    yield from c.walk(predicate)
+        # Iterative (explicit stack) rather than recursive generators: a
+        # recursive walk delegates through one generator per tree level, so
+        # every yielded node bubbles up through O(depth) `yield from`s.  The
+        # stack holds bare integer indices; a cursor is only materialized for
+        # nodes we actually visit, and is_leaf/leaf_obj are computed once each
+        # (the old code paid for is_leaf twice and fetched a leaf_obj the query
+        # predicates never looked at).
+        root = self.root
+        npool = self.npool
+        leaf_flags = root.node_leaf_flags
+        leaf_pool = root.leaf_pool
+        stack = [self.index]
+        while stack:
+            idx = stack.pop()
+            is_leaf = leaf_flags[idx]
+            c = _NodeCursor._load(root, idx)
+            leaf_o = leaf_pool[c.first_child] if is_leaf else None
+            if predicate(c, leaf_o):
+                yield c
+                if not is_leaf:
+                    child = npool[idx * 2 + 1]
+                    while child != 0:
+                        stack.append(child)
+                        child = npool[child * 2]
 
     def query_rect(self, r):
         """Return things that intersect with 'r'."""
+        if r is NullRect:
+            return
 
-        def p(o, x):
-            return r.does_intersect(o.rect)
+        rx, ry, rxx, ryy = r.x, r.y, r.xx, r.yy
+        root = self.root
+        rpool = self.rpool
+        npool = self.npool
+        leaf_flags = root.node_leaf_flags
+        null_flags = root.node_null_flags
 
-        yield from self.walk(p)
+        # Test intersection straight against the raw coordinate pool -- no
+        # per-node Rect object, and null nodes are skipped by flag (matching
+        # Rect.does_intersect's NullRect short-circuit).
+        stack = [self.index]
+        while stack:
+            idx = stack.pop()
+            if null_flags[idx]:
+                continue
+            ri = idx * 4
+            ox = rpool[ri]
+            if (rxx if rxx < rpool[ri + 2] else rpool[ri + 2]) - (rx if rx > ox else ox) <= 0:
+                continue
+            oy = rpool[ri + 1]
+            if (ryy if ryy < rpool[ri + 3] else rpool[ri + 3]) - (ry if ry > oy else oy) <= 0:
+                continue
+
+            yield _NodeCursor._load(root, idx)
+
+            if not leaf_flags[idx]:
+                child = npool[idx * 2 + 1]
+                while child != 0:
+                    stack.append(child)
+                    child = npool[child * 2]
 
     def query_point(self, point):
         """Query by a point"""
+        px, py = point
+        root = self.root
+        rpool = self.rpool
+        npool = self.npool
+        leaf_flags = root.node_leaf_flags
 
-        def p(o, x):
-            return o.rect.does_containpoint(point)
+        # Raw-coordinate containment test.  Null nodes store (0,0,0,0) in the
+        # pool, so this reproduces Rect.does_containpoint exactly (including the
+        # origin edge case) without a special case.
+        stack = [self.index]
+        while stack:
+            idx = stack.pop()
+            ri = idx * 4
+            if not (rpool[ri] <= px <= rpool[ri + 2] and rpool[ri + 1] <= py <= rpool[ri + 3]):
+                continue
 
-        yield from self.walk(p)
+            yield _NodeCursor._load(root, idx)
+
+            if not leaf_flags[idx]:
+                child = npool[idx * 2 + 1]
+                while child != 0:
+                    stack.append(child)
+                    child = npool[child * 2]
 
     def lift(self):
         return _NodeCursor(self.root, self.index, self.rect, self.first_child, self.next_sibling)
@@ -226,11 +298,23 @@ class _NodeCursor:
                 #     ((c.rect.union(leafrect)).area() - c.rect.area(), c.index)
                 #     for c in self.children()
                 # ])
+                # We walk the sibling chain straight through the pools instead
+                # of via children(), which would allocate a Rect per child; the
+                # descent touches every level on every insert.  leafrect's
+                # coords are also hoisted out of the loop (they were re-unpacked
+                # per child before).
+                npool = self.npool
+                rpool = self.rpool
+                lx, ly, lxx, lyy = leafrect.x, leafrect.y, leafrect.xx, leafrect.yy
                 child = None
                 minarea = -1.0
-                for c in self.children():
-                    x, y, xx, yy = c.rect.coords()
-                    lx, ly, lxx, lyy = leafrect.coords()
+                ci = self.first_child
+                while ci != 0:
+                    ri = ci * 4
+                    x = rpool[ri]
+                    y = rpool[ri + 1]
+                    xx = rpool[ri + 2]
+                    yy = rpool[ri + 3]
                     nx = x if x < lx else lx
                     nxx = xx if xx > lxx else lxx
                     ny = y if y < ly else ly
@@ -238,7 +322,8 @@ class _NodeCursor:
                     a = (nxx - nx) * (nyy - ny)
                     if minarea < 0 or a < minarea:
                         minarea = a
-                        child = c.index
+                        child = ci
+                    ci = npool[ci * 2]
                 # End micro-optimization
 
                 self.rect = self.rect.union(leafrect)
