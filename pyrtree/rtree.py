@@ -385,20 +385,21 @@ class _NodeCursor:
         ns = self.next_sibling
         r = self.rect
 
-        self._become(self.first_child)
-        while True:
-            yield self
-            if 0 == self.next_sibling:
-                break
-            else:
-                self._become(self.next_sibling)
-
-        # Go back to becoming the same node we were.
-        # self._become(idx)
-        self.index = idx
-        self.first_child = fc
-        self.next_sibling = ns
-        self.rect = r
+        try:
+            self._become(self.first_child)
+            while True:
+                yield self
+                if 0 == self.next_sibling:
+                    break
+                else:
+                    self._become(self.next_sibling)
+        finally:
+            # Go back to becoming the same node we were, even if the
+            # caller stops iterating early (break) or raises.
+            self.index = idx
+            self.first_child = fc
+            self.next_sibling = ns
+            self.rect = r
 
 
 def avg_diagonals(node, onodes, memo_tab):

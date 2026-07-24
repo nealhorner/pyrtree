@@ -4,6 +4,8 @@ An R-Tree implementation
 Taken from https://code.google.com/archive/p/pyrtree/source/default/source
 (No way to automatically move the versioned source code from code.google.com, so this is copied)
 
+See [doc/USAGE.md](doc/USAGE.md) for a full usage guide.
+
 Here's the original project description (https://code.google.com/archive/p/pyrtree/):
 
 # pyrtree
@@ -51,4 +53,31 @@ libspatialindex C library. It's an optional extra since it needs that system lib
 ```shell
 uv sync --extra bench-compare
 ```
+
+# Performance
+
+pyrtree is pure Python, so it trades raw throughput for having no C dependencies and full
+access to internal tree nodes. As a rough guide, on an Apple M1 Max (Python 3.14), inserting
+50,000 randomly-sized rectangles scattered over a 1000x1000 area and then querying them gives:
+
+| Operation      | Throughput          | Latency      |
+|----------------|----------------------|--------------|
+| Insert         | ~15,800 inserts/sec  | ~63 us/insert |
+| Point query    | ~4,700 queries/sec   | ~213 us/query |
+| Rect query     | ~3,000 queries/sec   | ~336 us/query |
+
+These numbers are illustrative, not guarantees -- actual performance depends heavily on your
+hardware, Python version, and the size/distribution of the rectangles you're indexing. Query
+latency in particular grows with how much of the tree a given query overlaps.
+
+To benchmark on your own machine and data:
+
+```shell
+uv run python pyrtree/bench/bench_rtree.py            # insert-only throughput over time
+uv run bin/gitbench.sh                                 # working tree vs. last commit
+```
+
+If you want a C-library baseline for comparison, install the `bench-compare` extra and run
+`bench_libspatial.py` (see above) -- expect libspatialindex to be significantly faster for
+large datasets, since it isn't paying Python's per-object overhead.
 
