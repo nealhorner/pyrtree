@@ -231,10 +231,8 @@ class RTreeTest(ut.TestCase):
         seen[idx] = True
 
         if node.holds_leaves():
-            # print("node: %d, children: %r" % (node.index, [c.index for c in node.children()]))
             self.assertTrue(node.nchildren() == 0 or node.get_first_child().is_leaf())
             for c in node.children():
-                # print(c.index)
                 self.assertTrue(c.is_leaf())
                 self.assertTrue(isinstance(c.leaf_obj(), TstO))
         else:
