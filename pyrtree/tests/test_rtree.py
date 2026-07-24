@@ -288,6 +288,34 @@ class RTreeTest(ut.TestCase):
             rres = list([r.leaf_obj() for r in rt.query_rect(orect)])
             self.assertFalse(x in rres)
 
+    def testAbandonedWalkDoesNotCorruptTree(self):
+        """Partially consuming walk()/query_point()/query_rect() must not
+        leave the tree's root cursor stuck mid-traversal.
+
+        Filtering for is_leaf() forces each generator to recurse past the
+        root and down into the tree (the root itself is never a leaf, and
+        always trivially satisfies point/rect containment via the bounding
+        box, so an unfiltered next() would stop before any recursion and
+        not exercise the bug at all) before it gets abandoned without being
+        exhausted.
+        """
+        xs = [TstO(r) for r in take(20, G.rect, 0.01)]
+        tree = RTree()
+        for x in xs:
+            tree.insert(x, x.rect)
+            self.invariants(tree)
+
+        next(r for r in tree.walk(lambda x, y: True) if r.is_leaf())
+        p = G.pointInside(xs[0].rect)
+        next(r for r in tree.query_point(p) if r.is_leaf())
+        qrect = G.intersectingWith(xs[0].rect)
+        next(r for r in tree.query_rect(qrect) if r.is_leaf())
+
+        # A subsequent insert must still succeed.
+        extra = TstO(G.rect())
+        tree.insert(extra, extra.rect)
+        self.invariants(tree)
+
 
 if __name__ == "__main__":
     ut.main()
