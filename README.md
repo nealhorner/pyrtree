@@ -47,6 +47,14 @@ uv run ruff check .      # lint
 uv run ruff format .     # format
 ```
 
+Install the git hooks with [pre-commit](https://pre-commit.com/) to run lint and format checks
+automatically before each commit:
+
+```shell
+uv tool install pre-commit  # or: pip install pre-commit
+pre-commit install
+```
+
 The `bench_libspatial.py` benchmark compares against the `Rtree` package, which wraps the
 libspatialindex C library. It's an optional extra since it needs that system library installed:
 
