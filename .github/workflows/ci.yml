@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    name: test & lint (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Oldest supported (requires-python >=3.10) and the dev version.
+        python-version: ["3.10", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: uv sync --extra dev
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+      - name: Test (includes deterministic perf-budget guards)
+        run: uv run pytest -q
+
+  benchmark:
+    name: benchmark vs base (non-blocking)
+    # Wall-clock comparison only makes sense against a base branch.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    # Informational: a regression surfaces as a warning, it does not block merge.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need base branch history to check its source out later.
+          fetch-depth: 0
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
+      - run: uv sync --extra dev
+      - name: Stage benchmark scripts outside the tree (identical across both runs)
+        # Copied out so the harness stays byte-identical when we swap the
+        # package source to the base branch below; PYTHONPATH (set per step)
+        # makes `import pyrtree` resolve against whichever source is checked
+        # out in the workspace.
+        run: |
+          mkdir -p "$RUNNER_TEMP/bench"
+          cp pyrtree/bench/regression.py pyrtree/bench/compare.py "$RUNNER_TEMP/bench/"
+      - name: Benchmark PR branch
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: uv run --no-sync python "$RUNNER_TEMP/bench/regression.py" --label pr --out "$RUNNER_TEMP/pr.json"
+      - name: Swap in base branch source
+        # Reverts the package (rtree.py/rect.py/...) to the base commit; the
+        # copied-out harness above is unaffected.
+        run: git checkout ${{ github.event.pull_request.base.sha }} -- pyrtree
+      - name: Benchmark base branch
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: uv run --no-sync python "$RUNNER_TEMP/bench/regression.py" --label base --out "$RUNNER_TEMP/base.json"
+      - name: Compare (fails the step, not the job, on >15% regression)
+        run: uv run --no-sync python "$RUNNER_TEMP/bench/compare.py" "$RUNNER_TEMP/base.json" "$RUNNER_TEMP/pr.json" --tolerance 0.15
