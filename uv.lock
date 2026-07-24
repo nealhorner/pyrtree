@@ -61,7 +61,7 @@ wheels = [
 
 [[package]]
 name = "pyrtree"
-version = "0.51.7"
+version = "0.51.8"
 source = { editable = "." }
 
 [package.optional-dependencies]
