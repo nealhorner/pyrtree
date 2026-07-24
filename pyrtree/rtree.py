@@ -47,11 +47,11 @@ class RTree(object):
         assert(self.cursor.index == 0)
 
     def query_rect(self, r):
-        for x in self.cursor.query_rect(r): yield x
+        for x in self.cursor.lift().query_rect(r): yield x
     def query_point(self, p):
-        for x in self.cursor.query_point(p): yield x
+        for x in self.cursor.lift().query_point(p): yield x
     def walk(self,pred):
-        return self.cursor.walk(pred)
+        return self.cursor.lift().walk(pred)
 
 class _NodeCursor(object):
     @classmethod

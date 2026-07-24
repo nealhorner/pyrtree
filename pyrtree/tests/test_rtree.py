@@ -261,6 +261,24 @@ class RTreeTest(ut.TestCase):
             rres = list([r.leaf_obj() for r in rt.query_rect(orect)])
             self.assertFalse(x in rres)
 
+    def testAbandonedWalkDoesNotCorruptTree(self):
+        """ Partially consuming walk()/query_point()/query_rect() must not
+            leave the tree's root cursor stuck mid-traversal. """
+        xs = [ TstO(r) for r in take(20, G.rect, 0.1) ]
+        tree = RTree()
+        for x in xs:
+            tree.insert(x, x.rect)
+
+        # Abandon each iterator after a single item, without exhausting it.
+        next(iter(tree.walk(lambda x, y: True)))
+        next(iter(tree.query_point(G.pointInside(xs[0].rect))))
+        next(iter(tree.query_rect(G.intersectingWith(xs[0].rect))))
+
+        # A subsequent insert must still succeed.
+        extra = TstO(G.rect())
+        tree.insert(extra, extra.rect)
+        self.invariants(tree)
+
 
 if __name__ == '__main__':
     ut.main()
