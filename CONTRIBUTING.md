@@ -52,8 +52,8 @@ pre-commit install
    `version` relative to the base branch — the `version-check` job in
    [.github/workflows/pr-checks.yml](.github/workflows/pr-checks.yml) will fail the PR otherwise.
    Use your judgment on patch vs. minor bump based on the size of the change.
-7. If you changed dependencies or Python version support, regenerate the lockfile with
-   `uv lock`.
+7. If you changed dependencies, Python version support, or the package version, regenerate the
+   lockfile with `uv lock`.
 
 ## Performance
 
@@ -73,7 +73,7 @@ performance is treated as a first-class concern:
   ```
 
 If you want a C-library baseline for comparison, install the `bench-compare` extra
-(`uv sync --extra bench-compare`) and run `bench_libspatial.py`.
+(`uv sync --extra bench-compare`) and run `uv run python pyrtree/bench/bench_libspatial.py`.
 
 ## Code style
 
