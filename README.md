@@ -14,12 +14,12 @@ See [doc/USAGE.md](doc/USAGE.md) for a full usage guide.
 ```python
 from pyrtree import RTree, Rect
 
-# inserting
+# inserting -- key must be unique; raises ValueError otherwise
 t = RTree()
-t.insert(some_kind_of_object, Rect(min_x, min_y, max_x, max_y))
+t.insert(some_key, some_kind_of_object, Rect(min_x, min_y, max_x, max_y))
 
-# deleting (same object + rect used to insert it)
-t.delete(some_kind_of_object, Rect(min_x, min_y, max_x, max_y))
+# deleting by key
+t.delete_by_key(some_key)
 
 # querying
 point_res = t.query_point((x, y))

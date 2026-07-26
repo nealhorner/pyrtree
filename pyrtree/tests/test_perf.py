@@ -60,7 +60,7 @@ def _build_tree():
     for i in range(N):
         x, y = rng.uniform(0, 1000), rng.uniform(0, 1000)
         w, h = rng.uniform(0, 1), rng.uniform(0, 1)
-        rt.insert(i, Rect(x, y, x + w, y + h))
+        rt.insert(i, i, Rect(x, y, x + w, y + h))
     return rt, rng
 
 

@@ -40,7 +40,7 @@ def _build(rects):
     random.seed(SEED)  # k-means uses the global RNG
     rt = RTree()
     for i, r in enumerate(rects):
-        rt.insert(i, r)
+        rt.insert(i, i, r)
     return rt
 
 
