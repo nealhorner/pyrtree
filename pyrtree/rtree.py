@@ -36,7 +36,13 @@ class RTree:
         self.node_pool = array.array("L")
         self.node_leaf_flags = array.array("B")
         self.node_null_flags = array.array("B")
+        self.node_parent_pool = array.array("L")
         self.leaf_pool = []  # leaf objects.
+
+        # Maps a caller-supplied key to the tree-node index of its leaf, so
+        # delete_by_key() can jump straight to the node's parent instead of
+        # descending from the root.
+        self.key_index = {}
 
         self.cursor = _NodeCursor.create(self, NullRect)
 
@@ -46,10 +52,70 @@ class RTree:
             self.node_pool.extend([0, 0] * idx)
             self.node_leaf_flags.extend([0] * idx)
             self.node_null_flags.extend([0] * idx)
+            self.node_parent_pool.extend([0] * idx)
 
-    def insert(self, o, orect):
-        self.cursor.insert(o, orect)
+    def insert(self, key, o, orect):
+        """Insert `o`, bounded by `orect`, under `key`.
+
+        `key` must be unique among currently-present items (checked with a
+        dict lookup) -- it's how `delete_by_key()` finds this leaf again
+        later. Raises `ValueError` if `key` is already in use; delete or
+        update the existing entry first if that's what you meant.
+        """
+        if key in self.key_index:
+            raise ValueError(f"key {key!r} is already present in the index")
+        leaf_index = self.cursor.insert(o, orect)
+        self.key_index[key] = leaf_index
         assert self.cursor.index == 0
+
+    def delete_by_key(self, key):
+        """Remove the item inserted under `key`.
+
+        Returns True if `key` was present and its leaf was removed, False
+        otherwise.
+
+        Unlike matching by object/rect, this doesn't need to descend the
+        tree at all: the leaf's parent is looked up directly (O(1)), and
+        only that parent's own children (at most `MAXCHILDREN`) are
+        scanned to unlink it. Ancestor bounding rectangles are left as-is
+        rather than shrunk back down -- they stay correct (if a little
+        looser than optimal) since a superset of the true bounds still
+        safely prunes queries.
+        """
+        leaf_index = self.key_index.pop(key, None)
+        if leaf_index is None:
+            return False
+
+        npool = self.node_pool
+        parent_index = self.node_parent_pool[leaf_index]
+
+        prev = 0
+        ci = npool[parent_index * 2 + 1]
+        while ci != 0:
+            next_ci = npool[ci * 2]
+            if ci == leaf_index:
+                if prev == 0:
+                    npool[parent_index * 2 + 1] = next_ci
+                else:
+                    npool[prev * 2] = next_ci
+                leaf_pool_index = npool[leaf_index * 2 + 1]
+                self.leaf_pool[leaf_pool_index] = None
+                if parent_index == self.cursor.index:
+                    # self.cursor caches its own first_child/next_sibling
+                    # in Python attributes rather than reading node_pool
+                    # live -- when the root is the parent we just mutated
+                    # above, that cache is now stale, so refresh it. (Any
+                    # other node's cursor is always freshly loaded via
+                    # _load()/_become() before use, so only the persistent
+                    # root cursor can go stale like this.)
+                    self.cursor._become(self.cursor.index)
+                return True
+            prev = ci
+            ci = next_ci
+
+        # key_index and the tree should never disagree, but don't silently
+        # pretend success if they somehow do.
+        return False
 
     def query_rect(self, r):
         yield from self.cursor.lift().query_rect(r)
@@ -273,19 +339,22 @@ class _NodeCursor:
         return sum(1 for _ in self.children())
 
     def insert(self, leafo, leafrect):
+        """Insert leafo/leafrect and return the new leaf's tree-node index."""
         index = self.index
 
         # tail recursion, made into loop:
         while True:
             if self.holds_leaves():
                 self.rect = self.rect.union(leafrect)
-                self._insert_child(_NodeCursor.create_leaf(self.root, leafo, leafrect))
+                leaf = _NodeCursor.create_leaf(self.root, leafo, leafrect)
+                leaf_index = leaf.index
+                self._insert_child(leaf)
 
                 self._balance()
 
                 # done: become the original again
                 self._become(index)
-                return
+                return leaf_index
             else:
                 # Not holding leaves, move down a level in the tree:
 
@@ -358,8 +427,10 @@ class _NodeCursor:
         if 0 == len(cs):
             return
 
+        parent_pool = self.root.node_parent_pool
         pred = None
         for c in cs:
+            parent_pool[c.index] = self.index
             if pred is not None:
                 pred.next_sibling = c.index
                 pred._save_back()
@@ -371,6 +442,7 @@ class _NodeCursor:
         self._save_back()
 
     def _insert_child(self, c):
+        self.root.node_parent_pool[c.index] = self.index
         c.next_sibling = self.first_child
         self.first_child = c.index
         c._save_back()

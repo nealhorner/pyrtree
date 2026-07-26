@@ -222,6 +222,13 @@ class RTreeTest(ut.TestCase):
     def invariants(self, tree):
         self.assertEqual(tree.cursor.index, 0)
         self._invariants(tree.cursor, {})
+        # key_index must always agree with the tree: every key's recorded
+        # node index really is a live leaf reachable from the root.
+        live_leaf_indices = {n.index for n in tree.walk(lambda x, y: True) if n.is_leaf()}
+        for key, node_index in tree.key_index.items():
+            self.assertIn(
+                node_index, live_leaf_indices, f"key {key!r} points at a non-leaf/unreachable node"
+            )
 
     def _invariants(self, node, seen):
         idx = node.index
@@ -243,6 +250,8 @@ class RTreeTest(ut.TestCase):
         r = Rect(node.rect.x, node.rect.y, node.rect.xx, node.rect.yy)
         for c in node.children():
             assert r.does_contain(c.rect)
+            # node_parent_pool bookkeeping must track the real tree shape.
+            self.assertEqual(node.root.node_parent_pool[c.index], idx)
 
         self.assertEqual(idx, node.index)
 
@@ -256,8 +265,8 @@ class RTreeTest(ut.TestCase):
         """Test container-like behaviour."""
         xs = [TstO(r) for r in take(100, G.rect, 0.1)]
         tree = RTree()
-        for x in xs:
-            tree.insert(x, x.rect)
+        for key, x in enumerate(xs):
+            tree.insert(key, x, x.rect)
             self.invariants(tree)
 
         ws = [x.leaf_obj() for x in tree.walk(lambda x, y: True) if x.is_leaf()]
@@ -274,8 +283,8 @@ class RTreeTest(ut.TestCase):
         """Tests that an r-tree still works like a container even with highly overlapping rects."""
         xs = [TstO(r) for r in take(1000, G.rect, 20.0)]
         tree = RTree()
-        for x in xs:
-            tree.insert(x, x.rect)
+        for key, x in enumerate(xs):
+            tree.insert(key, x, x.rect)
             self.invariants(tree)
 
         ws = [x.leaf_obj() for x in tree.walk(lambda x, y: True) if x.is_leaf()]
@@ -286,8 +295,8 @@ class RTreeTest(ut.TestCase):
         tree = RTree()
         rect = G.rect()
         xs = [TstO(rect) for i in range(11)]
-        for x in xs:
-            tree.insert(x, x.rect)
+        for key, x in enumerate(xs):
+            tree.insert(key, x, x.rect)
             self.invariants(tree)
 
     def testOriginPointNotConfusedWithNullRect(self):
@@ -296,10 +305,10 @@ class RTreeTest(ut.TestCase):
         also stores raw coordinates (0,0,0,0))."""
         tree = RTree()
         origin = TstO(Rect(0, 0, 0, 0))
-        tree.insert(origin, origin.rect)
+        tree.insert("origin", origin, origin.rect)
         for i in range(1, 15):
             x = TstO(Rect(i, i, i + 1, i + 1))
-            tree.insert(x, x.rect)
+            tree.insert(i, x, x.rect)
         self.invariants(tree)
 
         origin_leaf_rects = [
@@ -315,8 +324,8 @@ class RTreeTest(ut.TestCase):
     def testPointQuery(self):
         xs = [TstO(r) for r in take(1000, G.rect, 0.01)]
         tree = RTree()
-        for x in xs:
-            tree.insert(x, x.rect)
+        for key, x in enumerate(xs):
+            tree.insert(key, x, x.rect)
             self.invariants(tree)
 
         for x in xs:
@@ -331,8 +340,8 @@ class RTreeTest(ut.TestCase):
     def testRectQuery(self):
         xs = [TstO(r) for r in take(1000, G.rect, 0.01)]
         rt = RTree()
-        for x in xs:
-            rt.insert(x, x.rect)
+        for key, x in enumerate(xs):
+            rt.insert(key, x, x.rect)
             self.invariants(rt)
 
         for x in xs:
@@ -361,8 +370,8 @@ class RTreeTest(ut.TestCase):
         """
         xs = [TstO(r) for r in take(20, G.rect, 0.01)]
         tree = RTree()
-        for x in xs:
-            tree.insert(x, x.rect)
+        for key, x in enumerate(xs):
+            tree.insert(key, x, x.rect)
             self.invariants(tree)
 
         next(r for r in tree.walk(lambda x, y: True) if r.is_leaf())
@@ -373,8 +382,113 @@ class RTreeTest(ut.TestCase):
 
         # A subsequent insert must still succeed.
         extra = TstO(G.rect())
-        tree.insert(extra, extra.rect)
+        tree.insert(len(xs), extra, extra.rect)
         self.invariants(tree)
+
+    def testDelete(self):
+        xs = [TstO(r) for r in take(200, G.rect, 0.1)]
+        tree = RTree()
+        keys = {}
+        for key, x in enumerate(xs):
+            tree.insert(key, x, x.rect)
+            keys[x] = key
+        self.invariants(tree)
+
+        random.shuffle(xs)
+        to_remove, to_keep = xs[:100], xs[100:]
+
+        # delete_by_key() is documented to leave ancestor bounds as-is
+        # rather than shrinking them back down -- confirm the root's rect
+        # really is left untouched by a deletion that doesn't empty the
+        # tree.
+        root_rect_before = tree.cursor.rect
+
+        for x in to_remove:
+            self.assertTrue(tree.delete_by_key(keys[x]))
+        self.invariants(tree)
+
+        self.assertEqual(tree.cursor.rect.coords(), root_rect_before.coords())
+
+        remaining = {r.leaf_obj() for r in tree.walk(lambda x, y: True) if r.is_leaf()}
+        self.assertEqual(remaining, set(to_keep))
+
+        for x in to_remove:
+            qp = G.pointInside(x.rect)
+            rs = [r.leaf_obj() for r in tree.query_point(qp)]
+            self.assertFalse(x in rs)
+
+        for x in to_keep:
+            qp = G.pointInside(x.rect)
+            rs = [r.leaf_obj() for r in tree.query_point(qp)]
+            self.assertTrue(x in rs)
+
+    def testDeleteByKeyMissingReturnsFalse(self):
+        tree = RTree()
+        present = TstO(Rect(0, 0, 1, 1))
+        tree.insert("present", present, present.rect)
+
+        self.assertFalse(tree.delete_by_key("missing"))
+
+        self.assertTrue(tree.delete_by_key("present"))
+        # A second delete of the same (now-removed) key fails.
+        self.assertFalse(tree.delete_by_key("present"))
+
+    def testInsertDuplicateKeyRaises(self):
+        tree = RTree()
+        a = TstO(Rect(0, 0, 1, 1))
+        b = TstO(Rect(5, 5, 6, 6))
+        tree.insert("k", a, a.rect)
+
+        with self.assertRaises(ValueError):
+            tree.insert("k", b, b.rect)
+
+        # The original entry is untouched by the failed duplicate insert.
+        self.invariants(tree)
+        remaining = [r.leaf_obj() for r in tree.walk(lambda x, y: True) if r.is_leaf()]
+        self.assertEqual(remaining, [a])
+
+        # Once the key is freed up (by deleting), it can be reused.
+        self.assertTrue(tree.delete_by_key("k"))
+        tree.insert("k", b, b.rect)
+        self.invariants(tree)
+
+    def testDeleteByKeySameObjectDifferentKeysIndependent(self):
+        """The same object can be inserted under two different keys --
+        deleting one key must not affect the other's entry."""
+        tree = RTree()
+        shared = TstO(Rect(0, 0, 1, 1))
+        tree.insert("first", shared, shared.rect)
+        tree.insert("second", shared, shared.rect)
+
+        self.assertTrue(tree.delete_by_key("first"))
+        self.assertFalse(tree.delete_by_key("first"))
+
+        remaining = [r.leaf_obj() for r in tree.walk(lambda x, y: True) if r.is_leaf()]
+        self.assertEqual(remaining, [shared])
+
+        self.assertTrue(tree.delete_by_key("second"))
+        self.assertFalse(tree.delete_by_key("second"))
+
+    def testDeleteThenInsertStillWorks(self):
+        """Deleting must not corrupt the tree's ability to keep growing
+        (exercises rebalancing after nodes have been unlinked)."""
+        tree = RTree()
+        xs = [TstO(r) for r in take(50, G.rect, 0.1)]
+        for key, x in enumerate(xs):
+            tree.insert(key, x, x.rect)
+
+        for key in range(25):
+            self.assertTrue(tree.delete_by_key(key))
+        self.invariants(tree)
+
+        more = [TstO(r) for r in take(50, G.rect, 0.1)]
+        for i, x in enumerate(more):
+            tree.insert(50 + i, x, x.rect)
+            self.invariants(tree)
+
+        expected = set(xs[25:]) | set(more)
+        actual = {r.leaf_obj() for r in tree.walk(lambda x, y: True) if r.is_leaf()}
+        self.assertEqual(actual, expected)
 
 
 class _FakeNode:

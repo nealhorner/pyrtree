@@ -2,7 +2,7 @@
 
 A pure Python R-Tree spatial index implementation with zero dependencies. The current version only implements a 2-dimensional index.
 
-A faster Python implementation with a libspatialindex dependancies is [rtree](https://github.com/Toblerity/rtree).
+A faster Python implementation with a libspatialindex dependency is [rtree](https://github.com/Toblerity/rtree).
 
 This project was originally taken from Dan Shoutis's [pyrtree](https://code.google.com/archive/p/pyrtree/source/default/source) project and then forked from [Rhoana's pyrtree](https://github.com/Rhoana/pyrtree).
 
@@ -14,9 +14,12 @@ See [doc/USAGE.md](doc/USAGE.md) for a full usage guide.
 ```python
 from pyrtree import RTree, Rect
 
-# inserting
+# inserting -- key must be unique; raises ValueError otherwise
 t = RTree()
-t.insert(some_kind_of_object, Rect(min_x, min_y, max_x, max_y))
+t.insert(some_key, some_kind_of_object, Rect(min_x, min_y, max_x, max_y))
+
+# deleting by key
+t.delete_by_key(some_key)
 
 # querying
 point_res = t.query_point((x, y))

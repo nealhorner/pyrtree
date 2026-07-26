@@ -60,6 +60,6 @@ if __name__ == "__main__":
             interval_start = time.perf_counter()
             last_v = v
         o = TstO(G.rect(0.000001))
-        rt.insert(v, o.rect)
+        rt.insert(v, o, o.rect)
 
     # Done.

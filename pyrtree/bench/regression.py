@@ -14,6 +14,7 @@ Usage:
 
 import argparse
 import gc
+import inspect
 import json
 import random
 import time
@@ -39,8 +40,18 @@ def _make_rects(rng, n, size):
 def _build(rects):
     random.seed(SEED)  # k-means uses the global RNG
     rt = RTree()
-    for i, r in enumerate(rects):
-        rt.insert(i, r)
+    # The CI benchmark job runs this same (copied-out) script against both
+    # the PR's pyrtree source and the base branch's, to diff wall-clock
+    # cost. insert()'s signature changed (key-based delete added a required
+    # `key` argument), so detect which one is checked out rather than
+    # hard-coding the current call and breaking that comparison across the
+    # PR that made the change.
+    if len(inspect.signature(rt.insert).parameters) >= 3:
+        for i, r in enumerate(rects):
+            rt.insert(i, i, r)
+    else:
+        for i, r in enumerate(rects):
+            rt.insert(i, r)
     return rt
 
 
